@@ -13,6 +13,7 @@ rig.py — параметры стенда для скриптов репо.
 заворачивается в ssh. Всё остальное в скриптах одинаково.
 """
 import os
+import sys
 import subprocess
 from pathlib import Path
 
@@ -106,7 +107,70 @@ def vram_used_mib():
     return int(digits) if digits else 0
 
 
+def leak_check(staged_only=True):
+    """Ищет значения из rig.local.env в том, что собираемся закоммитить.
+
+    Репозиторий публичный, а тексты в нём пишет агент — рано или поздно в чекпоинт
+    попадёт живой IP или SSID. Правило в AGENTS.md от этого не спасает, проверка спасает.
+
+    Возвращает список находок: (файл, номер строки, ключ, строка).
+    """
+    cfg = load()
+    # Что реально нельзя публиковать. RIG_MODE/RIG_ROOT/RIG_NAME не секреты,
+    # а RIG_SSH_USER короче 4 символов даёт ложные срабатывания ("llm" в C:\llm).
+    keys = ["RIG_HOST", "RIG_HOSTNAME", "RIG_WIFI_SSID", "RIG_SSH_USER"]
+    needles = {}
+    for key in keys:
+        value = (cfg.get(key) or "").strip()
+        if len(value) >= 4:
+            needles[value] = key
+    key_path = (cfg.get("RIG_SSH_KEY") or "").strip()
+    if key_path:
+        name = os.path.basename(key_path.rstrip("/"))
+        if len(name) >= 4:
+            needles[name] = "RIG_SSH_KEY"
+    if not needles:
+        return []
+
+    rev = ["git", "diff", "--cached", "--name-only", "--diff-filter=ACM"]
+    if not staged_only:
+        rev = ["git", "ls-files"]
+    try:
+        files = subprocess.run(rev, capture_output=True, text=True,
+                               cwd=str(ROOT)).stdout.split()
+    except (subprocess.SubprocessError, OSError):
+        return []
+
+    hits = []
+    for rel in files:
+        path = ROOT / rel
+        if not path.is_file():
+            continue
+        try:
+            text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            continue
+        for num, line in enumerate(text.splitlines(), 1):
+            for needle, key in needles.items():
+                if needle in line:
+                    hits.append((rel, num, key, line.strip()[:120]))
+    return hits
+
+
 if __name__ == "__main__":
+    if "--check" in sys.argv:
+        scope_all = "--all" in sys.argv
+        found = leak_check(staged_only=not scope_all)
+        if found:
+            print("НАЙДЕНЫ идентификаторы стенда в публикуемых файлах:\n")
+            for rel, num, key, line in found:
+                print(f"  {rel}:{num}  ({key})\n    {line}")
+            print("\nЗамени на $RIG_* или напиши обобщённо — репозиторий публичный.")
+            sys.exit(1)
+        print("чисто: идентификаторов стенда в "
+              + ("отслеживаемых" if scope_all else "проиндексированных") + " файлах нет")
+        sys.exit(0)
+
     cfg = load()
     if not cfg:
         raise SystemExit(_HINT)
