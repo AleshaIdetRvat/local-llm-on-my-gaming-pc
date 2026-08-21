@@ -1,0 +1,16 @@
+# macOS
+.DS_Store
+
+# Параметры конкретного стенда: IP, хостнейм, SSID, путь к ключу.
+# Шаблон — rig.example.env (коммитится).
+rig.local.env
+
+# Служебное состояние Claude Code (не контент проекта)
+.claude/scheduled_tasks.lock
+.claude/skills/.system/
+.claude/settings.local.json
+
+# Временные артефакты playwright-mcp
+.playwright-mcp/
+__pycache__/
+*.pyc

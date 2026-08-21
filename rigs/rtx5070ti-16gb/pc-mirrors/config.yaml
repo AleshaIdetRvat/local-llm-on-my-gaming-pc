@@ -1,0 +1,134 @@
+# llama-swap config — RTX 5070 Ti (16 GB), C:\llm
+# llama-swap слушает 0.0.0.0:8080/v1 и по полю "model" в запросе поднимает нужный
+# llama-server на внутреннем ${PORT}, а предыдущую модель глушит (в 16 ГБ VRAM
+# помещается только одна модель за раз). Клиенты по-прежнему ходят на 8080.
+#
+# Флаги моделей — из проверенных C:\llm\run*.bat (см. PLAN.md). Отличие только:
+#   --host 0.0.0.0 --port 8080   ->   --port ${PORT}
+# и убран redirect в лог (его пишет сам llama-swap).
+
+# Ждать готовности модели (загрузка веса 17-23 ГБ с диска + граф). С запасом.
+healthCheckTimeout: 300
+
+# Авто-выгрузка модели после простоя, сек. Освобождает VRAM (напр. под игру).
+# 1800 = 30 мин. Следующий запрос перегрузит модель (~10-25 c).
+# Поставь 0, если хочешь, чтобы активная модель висела в VRAM всегда (как раньше).
+globalTTL: 1800
+
+logLevel: info
+
+macros:
+  # Общие флаги для всех моделей (то, что совпадает во всех трёх run*.bat).
+  server: >
+    C:\llm\llama.cpp\llama-server.exe
+    --port ${PORT}
+    -ngl 999 -np 1 -fa on
+    --cache-type-k q8_0 --cache-type-v q8_0
+    -t 6 -b 2048 --jinja
+
+models:
+  # ── Прод: Qwen3.6-35B-A3B (vision вкл.), 100K, --n-cpu-moe 20, ub 2048 ──
+  # --reasoning-preserve: держит reasoning в истории (агентная стабильность,
+  #   preserved-thinking); клиент (Hermes) должен возвращать reasoning_content.
+  # Сэмплинг — рекомендованный Qwen: temp 0.6 / top-p 0.95 / top-k 20.
+  qwen3.6-35b-a3b:
+    cmd: |
+      ${server}
+      -m C:\llm\models\qwen36-35b\Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
+      --n-cpu-moe 20 -c 102400 -ub 2048
+      --ctx-checkpoints 8 --checkpoint-min-step 1024
+      --mmproj C:\llm\models\qwen36-35b\mmproj-F16.gguf --no-mmproj-offload
+      --reasoning-preserve
+      --temp 0.6 --top-p 0.95 --top-k 20
+    # Стабильное имя для Hermes: ставь "default" — если позже перевешу этот
+    # алиас на другую модель, в Hermes менять ничего не надо.
+    aliases:
+      - default
+
+  # ── GLM-4.7-Flash полная (все 64 эксперта), 128K, --n-cpu-moe 19, ub 2048 ──
+  # --reasoning-preserve: GLM — z.ai-модель, preserved-thinking для неё родной
+  # (флаг ссылается прямо на z.ai docs), template glm4_moe_lite поддерживает.
+  glm-4.7-flash:
+    cmd: |
+      ${server}
+      -m C:\llm\models\glm47-flash-full\GLM-4.7-Flash-UD-Q4_K_XL.gguf
+      --n-cpu-moe 19 -c 131072 -ub 2048
+      --reasoning-preserve
+      --temp 0.7 --top-p 1.0 --min-p 0.01 --repeat-penalty 1.0
+
+  # ── GLM-4.7-Flash-REAP-23B (прунёная, быстрее), 128K, --n-cpu-moe 8, ub 512 ──
+  glm-4.7-flash-reap-23b:
+    cmd: |
+      ${server}
+      -m C:\llm\models\glm47-flash-reap-23b\GLM-4.7-Flash-REAP-23B-A3B-UD-Q4_K_XL.gguf
+      --n-cpu-moe 8 -c 131072 -ub 512
+      --reasoning-preserve
+
+  # == Gemma 4 12B QAT (text-only), dense -> whole model on GPU, 64K ==
+  # QAT checkpoint: near-BF16 quality at 4-bit, single GGUF UD-Q4_K_XL (6.72 GB).
+  # Google sampling: temp 1.0 / top-p 0.95 / top-k 64. Dense, so no --n-cpu-moe.
+  # Vision removed (mmproj-F16.gguf on disk unused). MTP drafter downloaded for later spec-decoding tests.
+  gemma-4-12b-qat:
+    # enable_thinking via env (llama-swap doesn't strip cmd-line quotes, so the
+    # JSON for --chat-template-kwargs must go through LLAMA_ARG_CHAT_TEMPLATE_KWARGS).
+    env:
+      - 'LLAMA_ARG_CHAT_TEMPLATE_KWARGS={"enable_thinking":true}'
+    cmd: |
+      ${server}
+      -m C:\llm\models\gemma4-12b-qat\gemma-4-12B-it-qat-UD-Q4_K_XL.gguf
+      -c 65536 -ub 2048
+      --temp 1.0 --top-p 0.95 --top-k 64
+
+  # == Gemma 4 26B-A4B QAT (MoE, ~4B active) — whole model on GPU, 32K ==
+  # 26B total / top-8 of 128 experts (~4B active). QAT UD-Q4_K_XL = 13.3 GiB.
+  # Fully on GPU (no --n-cpu-moe): decode reads only ~4B active from VRAM, so it
+  # should beat the 12B dense on tg. -ub 512 keeps the compute buffer small so
+  # 13.3GB weights + KV(32K,q8_0 ~0.9GB) + buffers fit under 16 GiB. Hybrid attn
+  # (24 sliding-1024 + 6 full) keeps KV cheap. MTP drafter on disk for later spec.
+  # enable_thinking=true: Gemma's template defaults thinking OFF in the /chat path
+  #   (injects an empty <|channel>thought>), so we force it ON. Passed via env
+  #   (LLAMA_ARG_CHAT_TEMPLATE_KWARGS) because llama-swap doesn't strip cmd quotes.
+  # No --reasoning-preserve: it's a no-op here (template lacks supports_preserve_
+  #   reasoning). Gemma preserves reasoning natively — it re-feeds reasoning_content
+  #   behind tool_calls within the current turn, so the client must return it.
+  gemma-4-26b-a4b-qat:
+    env:
+      - 'LLAMA_ARG_CHAT_TEMPLATE_KWARGS={"enable_thinking":true}'
+    cmd: |
+      ${server}
+      -m C:\llm\models\gemma4-26b-a4b-qat\gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
+      -c 32768 -ub 512 -np 2
+      --temp 1.0 --top-p 0.95 --top-k 64
+
+  # == То же самое, но с выключенным мышлением ==
+  # Полный близнец gemma-4-26b-a4b-qat (те же веса, контекст, сэмплинг) —
+  # отличие ровно одно: enable_thinking=false, т.е. штатное поведение шаблона
+  # Gemma в /chat (пустой <|channel>thought>, модель сразу отвечает).
+  # Нужен для задач, где reasoning только жрёт токены и латентность.
+  gemma-4-26b-a4b-qat-nothink:
+    env:
+      - 'LLAMA_ARG_CHAT_TEMPLATE_KWARGS={"enable_thinking":false}'
+    cmd: |
+      ${server}
+      -m C:\llm\models\gemma4-26b-a4b-qat\gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf
+      -c 32768 -ub 512 -np 2
+      --temp 1.0 --top-p 0.95 --top-k 64
+
+  # == Ternary-Bonsai-27B (ternary/BitNet ~1.71 bit, Qwen3.6-27B base, dense) ==
+  # Runs ONLY on the PrismML llama.cpp fork (custom Q2_0 / ggml-type-42 kernels);
+  # stock b9851 cannot read it. Uses the g128 file (Q2_0.gguf) -- g64 is NOT
+  # compatible with the b9591 release binary (tensor-offset mismatch).
+  # Prism build is cuda-12.4 -> runs on Blackwell (sm_120) via PTX JIT: one-time
+  # ~24s warmup at cold load, decode normal afterwards (~64 tok/s @ 4K in the probe).
+  # Dense 27B ~7.2 GB -> fully on GPU, no --n-cpu-moe. Native context 262K; started
+  # at 32K, VRAM has huge headroom (measure and raise later). Sampling: Qwen defaults.
+  ternary-bonsai-27b:
+    cmd: |
+      C:\llm\llama.cpp-prism\llama-server.exe
+      --port ${PORT}
+      -ngl 999 -np 1 -fa on
+      --cache-type-k q8_0 --cache-type-v q8_0
+      -t 6 -b 2048 --jinja
+      -m C:\llm\models\ternary-bonsai-27b\Ternary-Bonsai-27B-Q2_0.gguf
+      -c 102400
+      --temp 0.6 --top-p 0.95 --top-k 20

@@ -1,0 +1,5 @@
+## 📍 Статус — чекпоинт 2026-07-04: ПРОД ВОЗВРАЩЁН НА Qwen3.6-35B-A3B (100K), читать первым делом ✅
+
+> **⚠️ ВАЖНО — прод-модель сейчас = Qwen3.6-35B-A3B (UD-Q4_K_XL, 100K).** По просьбе юзера (2026-07-04) откат с полной GLM обратно на Qwen. **Задача автозапуска `llama-server` теперь → `C:\llm\run.bat`** (Qwen). Слушает тот же `0.0.0.0:8080/v1`. Проверено: healthy локально и с макбука по LAN, модель `Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf` отдаётся `/v1/models`. Контекст 100K (102400) — меньше, чем 128K у GLM, но юзера устраивает. Прод-конфиг Qwen см. в нижнем чекпоинте «2026-07-01 (вечер)»: `--n-cpu-moe 20 -ub 2048 -c 102400`, decode ~66–70 / prefill ~2830, VRAM ~15.5 ГБ. GLM-конфиги (полная и REAP) сохранены ниже как варианты — вернуть = сменить action задачи на `run-glm-full.bat`/`run-glm.bat` + рестарт.
+>
+> **Откат обратно на GLM:** полная — `$a=New-ScheduledTaskAction -Execute "C:\Windows\System32\cmd.exe" -Argument "/c C:\llm\run-glm-full.bat"; Set-ScheduledTask -TaskName "llama-server" -Action $a`; REAP — то же с `run-glm.bat`. Затем `schtasks /End /TN llama-server; taskkill /IM llama-server.exe /F; schtasks /Run /TN llama-server`.

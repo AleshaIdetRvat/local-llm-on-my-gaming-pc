@@ -1,0 +1,10 @@
+{
+  "model": "qwen",
+  "messages": [
+    { "role": "user", "content": "Write a complete, production-quality TypeScript implementation of a generic LRU cache class. Requirements: generic key/value types, configurable max size, optional per-entry TTL with lazy expiration, O(1) get/set/delete using a doubly-linked list plus a Map, a peek method that does not affect recency, a stats getter (hits, misses, evictions), and full JSDoc comments on every public member. After the implementation, write a comprehensive suite of unit tests using Vitest covering eviction order, TTL expiry, stats accuracy, and edge cases. Finally, explain the key design decisions in a short paragraph." }
+  ],
+  "max_tokens": 900,
+  "temperature": 0.6,
+  "top_p": 0.95,
+  "top_k": 20
+}
