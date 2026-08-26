@@ -116,6 +116,17 @@
     на сложной задаче порядок по объёму раздумий может и не соблюстись.
   - Совсем без раздумий — `{"enable_thinking": false}`, это отдельный флаг,
     минующий весь блок `reasoning_effort`.
+- **⚠️ Меню «Reasoning» во встроенном WebUI llama.cpp — это НЕ `reasoning_effort`.**
+  Названия совпадают, механизм другой: пункты `Low` / `Medium` / `High` / `Max` — это
+  лимит токенов на размышления (512 / 2048 / 8192 / без лимита), уезжающий в запрос
+  полем `thinking_budget_tokens`. В `chat_template_kwargs` WebUI кладёт только
+  `enable_thinking` (пункт `Off`), а `reasoning_effort` не шлёт никогда — модель всегда
+  на дефолтном `xhigh`, меню лишь обрывает размышление по счётчику.
+  Выставить настоящий effort из WebUI — **Settings → Developer → Custom JSON**:
+  `{"chat_template_kwargs": {"reasoning_effort": "medium"}}`. Он подмешивается
+  `Object.assign`'ом последним и перебивает интерфейс, но слияние поверхностное:
+  заменит `chat_template_kwargs` целиком, а `thinking_budget_tokens` переживёт подмену —
+  поэтому меню держать на `Default`/`Max`, иначе к effort'у добавится обрезка бюджетом.
 - Не сделано: vision (`mmproj-F16.gguf` не качали), MTP-драфтер (1.37 ГБ — VRAM нет),
   слепое сравнение качества с прод-`qwen3.6-35b-a3b`.
 - Полный разбор — [experiments/qwen38-27b-2026-08-26/RESULTS.md](experiments/qwen38-27b-2026-08-26/RESULTS.md).
