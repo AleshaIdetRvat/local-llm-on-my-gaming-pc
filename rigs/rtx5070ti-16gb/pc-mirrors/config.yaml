@@ -32,6 +32,13 @@ models:
   #   preserved-thinking); клиент (Hermes) должен возвращать reasoning_content.
   # Сэмплинг — рекомендованный Qwen: temp 0.6 / top-p 0.95 / top-k 20.
   qwen3.6-35b-a3b:
+    name: "Qwen3.6-35B-A3B (vision)"
+    description: "Прод-модель: MoE 35B/A3B, UD-Q4_K_XL, картинки, 100K."
+    capabilities:
+      in: [text, image]
+      out: [text]
+      tools: true
+      context: 102400
     cmd: |
       ${server}
       -m C:\llm\models\qwen36-35b\Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf
@@ -49,6 +56,13 @@ models:
   # --reasoning-preserve: GLM — z.ai-модель, preserved-thinking для неё родной
   # (флаг ссылается прямо на z.ai docs), template glm4_moe_lite поддерживает.
   glm-4.7-flash:
+    name: "GLM-4.7-Flash"
+    description: "Полная GLM-4.7-Flash (64 эксперта), UD-Q4_K_XL, 128K."
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 131072
     cmd: |
       ${server}
       -m C:\llm\models\glm47-flash-full\GLM-4.7-Flash-UD-Q4_K_XL.gguf
@@ -58,6 +72,13 @@ models:
 
   # ── GLM-4.7-Flash-REAP-23B (прунёная, быстрее), 128K, --n-cpu-moe 8, ub 512 ──
   glm-4.7-flash-reap-23b:
+    name: "GLM-4.7-Flash-REAP-23B"
+    description: "Прунёная GLM-4.7-Flash (23B), быстрее полной, 128K."
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 131072
     cmd: |
       ${server}
       -m C:\llm\models\glm47-flash-reap-23b\GLM-4.7-Flash-REAP-23B-A3B-UD-Q4_K_XL.gguf
@@ -69,6 +90,13 @@ models:
   # Google sampling: temp 1.0 / top-p 0.95 / top-k 64. Dense, so no --n-cpu-moe.
   # Vision removed (mmproj-F16.gguf on disk unused). MTP drafter downloaded for later spec-decoding tests.
   gemma-4-12b-qat:
+    name: "Gemma 4 12B QAT"
+    description: "Dense 12B QAT целиком на GPU, thinking включён, 64K."
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 65536
     # enable_thinking via env (llama-swap doesn't strip cmd-line quotes, so the
     # JSON for --chat-template-kwargs must go through LLAMA_ARG_CHAT_TEMPLATE_KWARGS).
     env:
@@ -92,6 +120,13 @@ models:
   #   reasoning). Gemma preserves reasoning natively — it re-feeds reasoning_content
   #   behind tool_calls within the current turn, so the client must return it.
   gemma-4-26b-a4b-qat:
+    name: "Gemma 4 26B-A4B QAT"
+    description: "MoE 26B/A4B QAT, thinking включён, 2 слота по 16K."
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 16384
     env:
       - 'LLAMA_ARG_CHAT_TEMPLATE_KWARGS={"enable_thinking":true}'
     cmd: |
@@ -106,6 +141,13 @@ models:
   # Gemma в /chat (пустой <|channel>thought>, модель сразу отвечает).
   # Нужен для задач, где reasoning только жрёт токены и латентность.
   gemma-4-26b-a4b-qat-nothink:
+    name: "Gemma 4 26B-A4B QAT (no think)"
+    description: "Та же модель без раздумий, 2 слота по 16K."
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 16384
     env:
       - 'LLAMA_ARG_CHAT_TEMPLATE_KWARGS={"enable_thinking":false}'
     cmd: |
@@ -123,6 +165,13 @@ models:
   # Dense 27B ~7.2 GB -> fully on GPU, no --n-cpu-moe. Native context 262K; started
   # at 32K, VRAM has huge headroom (measure and raise later). Sampling: Qwen defaults.
   ternary-bonsai-27b:
+    name: "Ternary-Bonsai-27B"
+    description: "Тернарный (~1.71 бит) 27B на форке PrismML, 100K."
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 102400
     cmd: |
       C:\llm\llama.cpp-prism\llama-server.exe
       --port ${PORT}
@@ -159,6 +208,13 @@ models:
   # ВНИМАНИЕ клиентам: при xhigh и скупом max_tokens ответ приходит ПУСТОЙ --
   # весь бюджет уходит в reasoning_content. На 600 токенах это уже воспроизводится.
   qwen3.8-27b:
+    name: "Qwen3.8-27B"
+    description: "Dense 27B, гибридное внимание, UD-Q3_K_XL, KV q4_0, 128K."
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 131072
     cmd: |
       C:\llm\llama.cpp-b10630\llama-server.exe
       --port ${PORT}
@@ -177,6 +233,13 @@ models:
   # Замер: 64K/q8_0 -- pp 1553 @32K, tg 44.0, пик 15081 MiB.
   # Брать, если на длинном контексте покажется, что q4_0-кэш подъедает качество.
   qwen3.8-27b-q8kv:
+    name: "Qwen3.8-27B (KV q8_0)"
+    description: "То же самое с более точным KV-кэшем q8_0, 64K."
+    capabilities:
+      in: [text]
+      out: [text]
+      tools: true
+      context: 65536
     cmd: |
       C:\llm\llama.cpp-b10630\llama-server.exe
       --port ${PORT}

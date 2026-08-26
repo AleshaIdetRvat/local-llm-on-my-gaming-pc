@@ -63,6 +63,86 @@ models:
 - **`macros`** — общие флаги. Модель, которой нужен другой бинарник (например форк
   llama.cpp), макрос не использует и прописывает команду целиком.
 
+## Метаданные моделей: пусть клиент сам узнаёт, что есть на стенде
+
+`/v1/models` отдаёт не только список имён. Если у модели заполнить `name`,
+`description` и блок `capabilities`, llama-swap положит их в ответ — и клиенту
+не надо держать копию этого списка у себя в конфиге:
+
+```yaml
+models:
+  моя-модель:
+    name: "Моя модель 27B"
+    description: "Dense 27B, KV q4_0, 128K."
+    capabilities:
+      in: [text]              # [text, image] — если поднята с --mmproj
+      out: [text]
+      tools: true             # шаблон умеет tool calling (--jinja)
+      context: 131072         # потолок ОДНОГО запроса, см. ниже
+    cmd: |
+      ...
+```
+
+В ответе `/v1/models` это превращается в `name`, `description`,
+`architecture.input_modalities`, `capabilities.function_calling`,
+`supported_parameters` и `context_length` (плюс дубль в `meta.n_ctx` —
+формат роутера llama.cpp, его понимают клиенты вроде pi).
+
+- **`context` — не всегда равен `-c`.** При явном `-np N` контекст делится
+  между слотами: `-c 32768 -np 2` → потолок запроса 16384, это и надо писать.
+- Ничего из этого не влияет на запуск модели: llama-swap просто пересказывает
+  эти поля клиентам. Соврать здесь — значит соврать клиенту, а не сломать сервер.
+
+**Клиент, который читает это сам.** Для pi (`@earendil-works/pi-coding-agent`)
+в репо лежит расширение [`templates/pi/models-from-llama-swap.ts`](../templates/pi/models-from-llama-swap.ts):
+кладётся в `~/.pi/agent/extensions/`, на старте дёргает `/v1/models` и регистрирует
+провайдер по факту. В `~/.pi/agent/models.json` остаётся только подключение:
+
+```json
+{
+  "providers": {
+    "rig": {
+      "baseUrl": "http://ХОСТ-ПК:8080/v1",
+      "api": "openai-completions",
+      "apiKey": "sk-local",
+      "compat": { "supportsDeveloperRole": false, "supportsReasoningEffort": false }
+    }
+  }
+}
+```
+
+Новая модель на стенде → появляется в `/model` у клиента сама, править на ноутбуке
+нечего. Стенд спит — берётся последний удачный список из кэша рядом с `models.json`.
+
+**Чего в `/v1/models` нет — то в `modelOverrides`.** Про режимы мышления llama-swap
+не знает ничего, поэтому reasoning описывается на стороне клиента; правки ложатся
+поверх полученного списка. Пример для модели, чей чат-шаблон читает
+`chat_template_kwargs` (Qwen3.8 — уровни `low` / `medium` / `xhigh`, где `high` —
+синоним `xhigh`, а незнакомое значение роняет запрос в HTTP 500):
+
+```json
+"modelOverrides": {
+  "моя-модель": {
+    "reasoning": true,
+    "thinkingLevelMap": {
+      "minimal": null, "low": "low", "medium": "medium",
+      "high": "xhigh", "xhigh": null, "max": null
+    },
+    "compat": {
+      "thinkingFormat": "chat-template",
+      "chatTemplateKwargs": {
+        "enable_thinking": { "$var": "thinking.enabled" },
+        "reasoning_effort": { "$var": "thinking.effort", "omitWhenOff": true }
+      }
+    }
+  }
+}
+```
+
+`null` = уровень скрыт из переключателя, строка = что уходит в шаблон.
+`omitWhenOff` убирает `reasoning_effort` из запроса, когда мышление выключено —
+остаётся один `enable_thinking: false`, как того и хочет шаблон.
+
 ## Три тонкости, на которых легко застрять
 
 **1. llama-swap не снимает кавычки в `cmd:`.** Из-за этого любой флаг со значением-JSON
@@ -135,8 +215,10 @@ curl <RIG_API>/models              # список моделей и алиасо
 1. Скачать GGUF (грабли скачивания — [windows-notes.md](windows-notes.md#скачивание-больших-файлов-веса-моделей)).
 2. Дописать блок в `models:` — обычно это `${server}`, `-m <путь>`, `-c <контекст>`
    и сэмплинг, рекомендованный авторами модели.
-3. Сохранить конфиг — `--watch-config` подхватит сам.
-4. `curl <RIG_API>/models` — убедиться, что модель появилась.
-5. Прогнать [замер](benchmarks.md) и записать цифры в свой `rigs/<стенд>/benchmarks.md`.
+3. Заполнить `name` / `description` / `capabilities` — чтобы клиенты узнали про
+   модель сами (см. [выше](#метаданные-моделей-пусть-клиент-сам-узнаёт-что-есть-на-стенде)).
+4. Сохранить конфиг — `--watch-config` подхватит сам.
+5. `curl <RIG_API>/models` — убедиться, что модель появилась.
+6. Прогнать [замер](benchmarks.md) и записать цифры в свой `rigs/<стенд>/benchmarks.md`.
 
 Подбор `-c`, `-ub` и `--n-cpu-moe` под свою видеокарту — [choosing-models.md](choosing-models.md).

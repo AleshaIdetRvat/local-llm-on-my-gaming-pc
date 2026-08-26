@@ -45,6 +45,16 @@ macros:
 models:
   # ── Пример 1: модель влезает в VRAM целиком (dense или компактная MoE) ──
   моя-модель:
+    # name/description/capabilities не влияют на запуск: llama-swap пересказывает
+    # их клиентам в /v1/models, чтобы те не держали свой список моделей.
+    # capabilities.context — потолок ОДНОГО запроса: при явном -np N это -c / N.
+    name: "Моя модель 27B"
+    description: "Dense 27B, 32K."
+    capabilities:
+      in: [text]              # [text, image] — если модель поднята с --mmproj
+      out: [text]
+      tools: true
+      context: 32768
     cmd: |
       ${server}
       -m C:\llm\models\моя-модель\weights.gguf
