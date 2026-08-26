@@ -3,7 +3,7 @@
 > **Железо:** RTX 5070 Ti 16 ГБ · Ryzen 5 7400F (6c/12t) · 32 ГБ DDR5-5600 · Windows 11.
 > Режим работы — `RIG_MODE=ssh` (агент на макбуке, ПК управляется по сети).
 >
-> Обновлено **2026-07-23** (зеркала синхронизированы с ПК по scp в этот же день).
+> Обновлено **2026-08-26** (зеркала синхронизированы с ПК по scp в этот же день).
 > Модели — [models.md](models.md) · замеры — [benchmarks.md](benchmarks.md) ·
 > хронология — [history/](history/) · переносимое знание — [docs/](../../docs/).
 
@@ -19,7 +19,7 @@
   под игры сама); следующий запрос перегружает её за ~10–30 с.
 - `--watch-config` — правки `config.yaml` подхватываются автоматически, рестарт не нужен.
 
-## Модели (7 записей / 6 весов, подробности в [models.md](models.md))
+## Модели (9 записей / 7 весов, подробности в [models.md](models.md))
 
 | `model` | Роль | Контекст |
 |---|---|---|
@@ -30,6 +30,8 @@
 | `glm-4.7-flash` | Полное качество GLM (все 64 эксперта) | 128K |
 | `glm-4.7-flash-reap-23b` | GLM быстрее (REAP-прун, near-lossless) | 128K |
 | `ternary-bonsai-27b` | Эксперимент: BitNet 27B в 7.17 ГБ (форк llama.cpp) | 100K |
+| `qwen3.8-27b` | Самая свежая: dense 27B, гибридная attention (билд b10630) | 128K |
+| `qwen3.8-27b-q8kv` | Она же с KV в `q8_0` (точнее кэш, меньше контекст) | 64K |
 
 Алиас `default` — стабильное имя для клиентов (Hermes и др.): при смене прод-модели
 перевешивается алиас в конфиге, клиенты не трогаются.
@@ -70,8 +72,9 @@ Get-ScheduledTask llama-server | Get-ScheduledTaskInfo
 |---|---|
 | `llama.cpp\` | Сток llama.cpp **b9851**, пребилт cuda-13.3 (прод-бинарь) |
 | `llama.cpp-prism\` | Форк PrismML `prism-b9591` cuda-12.4 — только для ternary-bonsai |
+| `llama.cpp-b10630\` | Сток **b10630** cuda-13.3 — только для `qwen3.8-27b*` (cudart-DLL скопированы из `llama.cpp\`) |
 | `llama-swap\` | llama-swap.exe v236 + `config.yaml` (зеркало → `pc-mirrors/`) |
-| `models\qwen36-35b\` · `glm47-flash-full\` · `glm47-flash-reap-23b\` · `gemma4-12b-qat\` · `gemma4-26b-a4b-qat\` · `ternary-bonsai-27b\` | GGUF-файлы моделей |
+| `models\qwen36-35b\` · `glm47-flash-full\` · `glm47-flash-reap-23b\` · `gemma4-12b-qat\` · `gemma4-26b-a4b-qat\` · `ternary-bonsai-27b\` · `qwen38-27b\` | GGUF-файлы моделей |
 | `run-swap.bat` | Запуск llama-swap (его дёргает задача автозапуска; зеркало → `pc-mirrors/`) |
 | `run.bat`, `run-glm*.bat` | Прямой запуск llama-server без свапа (откат; `run.bat` ↔ `pc-mirrors/run-qwen.*`) |
 | `bench-*.ps1`, `test-vision.ps1` | Локальные скрипты замеров на ПК |

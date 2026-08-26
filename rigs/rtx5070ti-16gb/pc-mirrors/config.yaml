@@ -132,3 +132,55 @@ models:
       -m C:\llm\models\ternary-bonsai-27b\Ternary-Bonsai-27B-Q2_0.gguf
       -c 102400
       --temp 0.6 --top-p 0.95 --top-k 20
+
+  # == Qwen3.8-27B -- dense 27B, гибрид 48 linear (DeltaNet) + 16 full-attn, 128K ==
+  # Свой бинарь b10630 рядом с прод-b9851 (C:\llm\llama.cpp-b10630\): на новую
+  # модель нужен свежий llama.cpp, а прод-модели трогать незачем. Макрос ${server}
+  # поэтому не используем -- как у ternary-bonsai.
+  # Из 64 слоёв KV растёт только у 16 (full_attention_interval=4), остальные 48 --
+  # DeltaNet без KV. Отсюда дешёвый контекст: 18 КБ/токен на q4_0 против 64 КБ f16.
+  # KV-квант ТОЛЬКО q4_0 или q8_0: у CUDA FA при head_dim 256 нет быстрого кернела
+  # для q5_1 -- pp обваливается 1437 -> 108 t/s при живой VRAM (проверено).
+  # q4_0 @128K: пик 15467 MiB, needle-тест 3/3 на 126K токенах -- деградации нет.
+  # Веса 11.4 ГБ на GPU + 521 МБ эмбеддингов в RAM; MTP-слой blk.64 не грузится.
+  # Сэмплинг Qwen для thinking-режима: temp 1.0 / top-p 0.95 / top-k 20 / min-p 0.
+  #
+  # Reasoning по умолчанию xhigh -- глубоко, но дорого: на задаче «объясни баг и
+  # дай код» это ~1924 токена размышлений и 67.6 с против ~224 и 34.3 с у medium
+  # (ответ по объёму тот же). Клиент может слать это позапросно:
+  #     "chat_template_kwargs": {"reasoning_effort": "medium"}   # low | medium | xhigh
+  #     "chat_template_kwargs": {"enable_thinking": false}       # совсем без раздумий
+  # Чтобы сделать medium дефолтом на весь сервер -- допиши сюда строку
+  #     --reasoning-effort medium
+  # ВНИМАНИЕ клиентам: при xhigh и скупом max_tokens ответ приходит ПУСТОЙ --
+  # весь бюджет уходит в reasoning_content. На 600 токенах это уже воспроизводится.
+  qwen3.8-27b:
+    cmd: |
+      C:\llm\llama.cpp-b10630\llama-server.exe
+      --port ${PORT}
+      -ngl 999 -np 1 -fa on
+      -t 6 -b 2048 --jinja
+      -m C:\llm\models\qwen38-27b\Qwen3.8-27B-UD-Q3_K_XL.gguf
+      -c 131072 -ub 512
+      --cache-type-k q4_0 --cache-type-v q4_0
+      --ctx-checkpoints 8 --checkpoint-min-step 1024
+      --reasoning-preserve
+      --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0
+
+  # == То же самое, но KV в q8_0 -- запасной вариант с более точным кэшем ==
+  # Те же веса и сэмплинг; отличие ровно два: --cache-type-* q8_0 и контекст 64K
+  # (q8_0 вдвое дороже q4_0 по KV, на 128K уже не влезает -- пик был бы ~17.8 ГБ).
+  # Замер: 64K/q8_0 -- pp 1553 @32K, tg 44.0, пик 15081 MiB.
+  # Брать, если на длинном контексте покажется, что q4_0-кэш подъедает качество.
+  qwen3.8-27b-q8kv:
+    cmd: |
+      C:\llm\llama.cpp-b10630\llama-server.exe
+      --port ${PORT}
+      -ngl 999 -np 1 -fa on
+      -t 6 -b 2048 --jinja
+      -m C:\llm\models\qwen38-27b\Qwen3.8-27B-UD-Q3_K_XL.gguf
+      -c 65536 -ub 512
+      --cache-type-k q8_0 --cache-type-v q8_0
+      --ctx-checkpoints 8 --checkpoint-min-step 1024
+      --reasoning-preserve
+      --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0

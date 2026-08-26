@@ -22,3 +22,4 @@
 | 2026-07-10 | [parallel-np2-incident](2026-07-10-parallel-np2-incident.md) | `-np 2` на gemma-26b (+47% суммарно) + инцидент repetition-loop (DRY — кандидат, не внедрён) |
 | 2026-07-17 | [ternary-bonsai-27b](2026-07-17-ternary-bonsai-27b.md) | Ternary/BitNet 27B (7.17 ГБ) через форк llama.cpp PrismML |
 | 2026-07-29 | [transcribe-pipeline](2026-07-29-transcribe-pipeline.md) | Пайплайн транскрибации созвонов: WhisperX + pyannote на ПК, выжимка через прод-Qwen. Прод не менялся |
+| 2026-08-26 | [qwen38-27b](2026-08-26-qwen38-27b.md) | Qwen3.8-27B `UD-Q3_K_XL` на **128K** (KV `q4_0`, билд b10630 отдельной папкой); находка: у CUDA FA нет быстрого кернела для KV `q5_1` при `head_dim 256` |
