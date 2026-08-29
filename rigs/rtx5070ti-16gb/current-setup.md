@@ -33,7 +33,7 @@
 | `glm-4.7-flash` | Полное качество GLM (все 64 эксперта) | 128K |
 | `glm-4.7-flash-reap-23b` | GLM быстрее (REAP-прун, near-lossless) | 128K |
 | `ternary-bonsai-27b` | Эксперимент: BitNet 27B в 7.17 ГБ (форк llama.cpp) | 100K |
-| `qwen3.8-27b` | Самая свежая: dense 27B, гибридная attention (билд b10630) | 128K |
+| `qwen3.8-27b` | Самая свежая: dense 27B, гибридная attention (билд b10630), vision на CPU | 128K |
 | `qwen3.8-27b-q8kv` | Она же с KV в `q8_0` (точнее кэш, меньше контекст) | 64K |
 
 Алиас `default` — стабильное имя для клиентов (Hermes и др.): при смене прод-модели

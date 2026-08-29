@@ -208,10 +208,10 @@ models:
   # ВНИМАНИЕ клиентам: при xhigh и скупом max_tokens ответ приходит ПУСТОЙ --
   # весь бюджет уходит в reasoning_content. На 600 токенах это уже воспроизводится.
   qwen3.8-27b:
-    name: "Qwen3.8-27B"
-    description: "Dense 27B, гибридное внимание, UD-Q3_K_XL, KV q4_0, 128K."
+    name: "Qwen3.8-27B (vision на CPU)"
+    description: "Dense 27B, гибридное внимание, UD-Q3_K_XL, KV q4_0, 128K, картинки через CPU-проектор."
     capabilities:
-      in: [text]
+      in: [text, image]
       out: [text]
       tools: true
       context: 131072
@@ -224,6 +224,7 @@ models:
       -c 131072 -ub 512
       --cache-type-k q4_0 --cache-type-v q4_0
       --ctx-checkpoints 8 --checkpoint-min-step 1024
+      --mmproj C:\llm\models\qwen38-27b\mmproj-F16.gguf --no-mmproj-offload
       --reasoning-preserve
       --temp 1.0 --top-p 0.95 --top-k 20 --min-p 0.0
 
